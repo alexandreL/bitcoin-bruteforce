@@ -17,6 +17,9 @@ import (
 	"golang.org/x/crypto/ripemd160"
 )
 
+// Version byte for mainnet = 0x00
+const VERSION_BYTE = 0x00
+
 func readAddresses(filePath string) (map[string]bool, error) {
 	addresses := make(map[string]bool)
 
@@ -54,18 +57,36 @@ func generateKeyAndAddress() (string, string, error) {
 	return hex.EncodeToString(privateKey.Serialize()), address, nil
 }
 
-func publicKeyToAddress(serializedPublicKey []byte) (string, error) {
-	publicSHA256 := sha256.Sum256(serializedPublicKey)
+func publicKeyToAddress(pubKey []byte) (string, error) {
 
-	ripemd160Hasher := ripemd160.New()
-	_, err := ripemd160Hasher.Write(publicSHA256[:])
+	// 1. SHA256
+	sha256Hash := sha256.Sum256(pubKey)
+
+	// 2. RIPEMD160
+	ripemd160Hash := ripemd160.New()
+	_, err := ripemd160Hash.Write(sha256Hash[:])
 	if err != nil {
 		return "", err
 	}
+	ripemdHash := ripemd160Hash.Sum(nil)
 
-	publicRIPEMD160 := ripemd160Hasher.Sum(nil)
+	// 3. Add version byte
+	versionedHash := append([]byte{VERSION_BYTE}, ripemdHash...)
 
-	return base58.CheckEncode(publicRIPEMD160[:], 0x00), nil
+	// 4. Double SHA256 for checksum
+	firstSHA := sha256.Sum256(versionedHash)
+	secondSHA := sha256.Sum256(firstSHA[:])
+
+	// 5. First 4 bytes of double-SHA is checksum
+	checksum := secondSHA[:4]
+
+	// 6. Concat version + ripemdHash + checksum
+	finalHash := append(versionedHash, checksum...)
+
+	// 7. Base58 encode
+	address := base58.Encode(finalHash)
+
+	return address, nil
 }
 
 func worker(id int, wg *sync.WaitGroup, mutex *sync.Mutex, outputFile string, btcAddresses map[string]bool) {
