@@ -41,7 +41,22 @@ type BtcAddress struct {
 	p2sh   string
 	bech32 string
 }
+type Counter struct {
+	count int64
+	mutex sync.Mutex
+}
 
+func (c *Counter) Increment() {
+	c.mutex.Lock()
+	c.count++
+	c.mutex.Unlock()
+}
+
+func (c *Counter) GetCount() int64 {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.count
+}
 func createBitcoinAddress(pubKey []byte, addrType AddressType) (string, error) {
 	switch addrType {
 	case P2PKH:
@@ -179,10 +194,14 @@ func btcAddressExist(address BtcAddress, btcAddresses map[string]bool) (string, 
 	return "", false
 }
 
-func worker(id int, wg *sync.WaitGroup, mutex *sync.Mutex, outputFile string, btcAddresses map[string]bool) {
+func worker(id int, wg *sync.WaitGroup, mutex *sync.Mutex, outputFile string, btcAddresses map[string]bool, counter *Counter) {
 	defer wg.Done()
 
 	for {
+		counter.Increment()
+		if counter.GetCount()%1000 == 0 {
+			fmt.Printf("Checked %d addresses\n", counter.GetCount())
+		}
 		privateKey, publicAddress, err := generateKeyAndAddress()
 		if err != nil {
 			log.Printf("Worker %d: Failed to generate key and address: %s", id, err)
@@ -231,10 +250,11 @@ func main() {
 
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
+	counter := &Counter{}
 
 	for i := 0; i < numThreads; i++ {
 		wg.Add(1)
-		go worker(i, &wg, &mutex, outputFile, btcAddresses)
+		go worker(i, &wg, &mutex, outputFile, btcAddresses, counter)
 	}
 
 	wg.Wait()
