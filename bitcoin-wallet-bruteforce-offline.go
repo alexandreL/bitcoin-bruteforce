@@ -3,6 +3,7 @@
 package main
 
 import (
+	"btcgen/telegram"
 	"bufio"
 	"encoding/hex"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"sync"
 
 	"crypto/sha256"
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -194,7 +196,7 @@ func btcAddressExist(address BtcAddress, btcAddresses map[string]bool) (string, 
 	return "", false
 }
 
-func worker(id int, wg *sync.WaitGroup, mutex *sync.Mutex, outputFile string, btcAddresses map[string]bool, counter *Counter) {
+func worker(id int, wg *sync.WaitGroup, mutex *sync.Mutex, outputFile string, btcAddresses map[string]bool, counter *Counter, telegramBot *telegram.Bot) {
 	defer wg.Done()
 
 	for {
@@ -222,6 +224,8 @@ func worker(id int, wg *sync.WaitGroup, mutex *sync.Mutex, outputFile string, bt
 			if _, err := file.WriteString(fmt.Sprintf("%s:%s\n", privateKey, publicAddressKey)); err != nil {
 				log.Printf("Worker %d: Failed to write to file: %s", id, err)
 			}
+
+			telegramBot.SendMessage(fmt.Sprintf("Match Found! Privatekey: %s Publicaddress: %s", privateKey, publicAddressKey))
 			file.Close()
 			mutex.Unlock()
 		}
@@ -239,7 +243,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid number of threads: %s", err)
 	}
+	// Load environment variables
+	log.Println("Loading environment variables...")
+	err = godotenv.Load()
+	if err != nil {
+		log.Println("Error loading environment variables.")
+	}
+	log.Println("Environment variables loaded successfully.")
 
+	// Initialize Telegram bot
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	chatID := os.Getenv("TELEGRAM_CHAT_ID")
+	telegramBot := telegram.NewBot(botToken, chatID)
+	log.Println("Telegram bot initialized.")
 	outputFile := os.Args[2]
 	btcAddressesFile := os.Args[3]
 
@@ -254,7 +270,7 @@ func main() {
 
 	for i := 0; i < numThreads; i++ {
 		wg.Add(1)
-		go worker(i, &wg, &mutex, outputFile, btcAddresses, counter)
+		go worker(i, &wg, &mutex, outputFile, btcAddresses, counter, telegramBot)
 	}
 
 	wg.Wait()
