@@ -15,6 +15,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"crypto/sha256"
 	"github.com/joho/godotenv"
@@ -45,19 +46,14 @@ type BtcAddress struct {
 }
 type Counter struct {
 	count int64
-	mutex sync.Mutex
 }
 
 func (c *Counter) Increment() {
-	c.mutex.Lock()
-	c.count++
-	c.mutex.Unlock()
+	atomic.AddInt64(&c.count, 1)
 }
 
 func (c *Counter) GetCount() int64 {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	return c.count
+	return atomic.LoadInt64(&c.count)
 }
 func createBitcoinAddress(pubKey []byte, addrType AddressType) (string, error) {
 	switch addrType {
