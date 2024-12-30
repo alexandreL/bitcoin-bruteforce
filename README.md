@@ -26,3 +26,9 @@ Make sure Golang 1.2.1 is installed or latest version.
 Bitcoin bech32 addresses are generated with the bech32 version of the script.
 
 The scripts come with the option to use telegram bots to save any bitcoin wallets automatically. If you do not whish to use this feature then put 123 as both values for the chat id and bot token.
+## Test 
+
+bitcoin-cli getnewaddress # P2PKH address
+bitcoin-cli getnewaddress "" "p2sh-segwit" # P2SH-SegWit
+bitcoin-cli getnewaddress "" "bech32" # Native SegWit
+bitcoin-cli dumpprivkey <address> # Get private key
